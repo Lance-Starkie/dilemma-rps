@@ -1,4 +1,4 @@
-# Dilem
+# Dilemma Rock Paper Scissors
 Dilemma Rock Paper Scissors: A Simple Game with Deep Layers
 This but robust implementation of DRPS in Python for use with mostly AI stuff, with support for multi (3+) agent play sessions for training in a context with social play to allow for exploration strategy around kingmaking and other social play.
 
