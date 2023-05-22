@@ -27,10 +27,10 @@ class Player:
     def choose_move(self, other_player):
         return Match.MOVES[random.randint(0,5)]
 
-    def choose_opponent(self, player_list, invalid_names) -> int:
+    def choose_opponent(self, player_list, banned_names):
         # Ensures the player chooses a valid opponent, not himself or a previously chosen player
-        valid_opponents = [player for player in player_list if player.name not in invalid_names]
-        return random.randint(0, len(valid_opponents) - 1)
+        valid_opponents = [player for player in player_list if player.name not in banned_names]
+        return player_list.index(valid_opponents[random.randint(0, len(valid_opponents) - 1)])
 
     def check_leave(self):
         return random.randint(1,100) < self.leave_rate
@@ -80,7 +80,7 @@ class Match:
         ("Cooperate", "Scissors"): lambda self, player1, player2: self.lose(player1, player2),
         ("Cooperate", "Cooperate"): lambda self, player1, player2: self.share(player1, player2),
         ("Cooperate", "Betray"): lambda self, player1, player2: self.betrayed(player1, player2),
-        ("Cooperate", "Block"): lambda self, player1, player2: self.tie(player1, player2),
+        ("Cooperate", "Block"): lambda self, player1, player2: self.win(player1, player2),
 
         ("Betray", "Rock"): lambda self, player1, player2: self.win(player1, player2),
         ("Betray", "Paper"): lambda self, player1, player2: self.win(player1, player2),
@@ -92,7 +92,7 @@ class Match:
         ("Block", "Rock"): lambda self, player1, player2: self.tie(player1, player2),
         ("Block", "Paper"): lambda self, player1, player2: self.tie(player1, player2),
         ("Block", "Scissors"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Block", "Cooperate"): lambda self, player1, player2: self.tie(player1, player2),
+        ("Block", "Cooperate"): lambda self, player1, player2: self.lose(player1, player2),
         ("Block", "Betray"): lambda self, player1, player2: self.win(player1, player2),
         ("Block", "Block"): lambda self, player1, player2: self.tie(player1, player2),
     }
@@ -183,8 +183,8 @@ class Match:
 
     def double_betray(self, player1, player2):
         self.pot += 10
-        player1.chips -= 5
-        player2.chips -= 5
+        player1.chips -= 4
+        player2.chips -= 4
         print(f"{player1.name} and {player2.name} both betray! Each put 5 chips in the pot!")
         return "double_betray"
 
@@ -204,11 +204,11 @@ class GameGroup:
         # Select the first player
         player_index = random.randint(0, len(self.players)-1)
         challenger = self.players[player_index]
-        invalid_names = [challenger.name]
+        banned_names = [challenger.name]
 
         while len(self.players) > 2 and self.pot > 0:
             # Select opponent
-            opponent_index = challenger.choose_opponent(self.players, invalid_names)
+            opponent_index = challenger.choose_opponent(self.players, banned_names)
             opponent = self.players[opponent_index]
             self.match_count += 1
             print()
@@ -248,26 +248,26 @@ class GameGroup:
                     self.past_players.append(
                         self.players.pop(opponent_index)
                     )
-                if challenger == opponent:
-                    challenger = opponent.choose_opponent(self.players, [opponent.name])
+            if not challenger in self.players:
+                challenger = opponent.choose_opponent(self.players, [opponent.name])
             player_index = self.players.index(challenger)
             if opponent in self.players:
                 opponent_index = self.players.index(opponent)
             
             # Select next player
-            invalid_names = []
+            banned_names = []
             if opponent in self.players:
                 player_index = self.players.index(opponent)
-                invalid_names.append(self.players[self.players.index(challenger)].name)
+                banned_names.append(self.players[self.players.index(challenger)].name)
             challenger = self.players[player_index]
-            invalid_names.append(challenger.name)
+            banned_names.append(challenger.name)
 
         print(f"\nEnd of game, {self.players[0].name} and {self.players[1].name} win and split the last {self.pot} chips!")
 
         #Distribute the last of the prize pot
         if self.pot != 0:
             for player in self.players:
-                player.chips += int(self.pot/len(self.player))
+                player.chips += int(self.pot/len(self.players))
             self.pot = 0
         
         for idx in range(len(self.players)):
@@ -284,7 +284,8 @@ if __name__ == "__main__":
         Player("Opponent 1"),
         Player("Opponent 2"),
         Player("Opponent 3"),
-        HumanPlayer("You"),
+        Player("Opponent 4"),
+        #HumanPlayer("You"),
     ], initial_pot = 100)
 
     group.play_all_matches()
