@@ -52,53 +52,37 @@ class HumanPlayer(Player):
         return random.randint(1,1000) < self.leave_rate
 
 class Match:
-    MOVES = ["Rock", "Paper", "Scissors", "Cooperate", "Betray", "Block"]
-    MOVE_RESULTS = {
-        ("Rock", "Rock"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Rock", "Paper"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Rock", "Scissors"): lambda self, player1, player2: self.win(player1, player2),
-        ("Rock", "Cooperate"): lambda self, player1, player2: self.win(player1, player2),
-        ("Rock", "Betray"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Rock", "Block"): lambda self, player1, player2: self.tie(player1, player2),
-
-        ("Paper", "Rock"): lambda self, player1, player2: self.win(player1, player2),
-        ("Paper", "Paper"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Paper", "Scissors"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Paper", "Cooperate"): lambda self, player1, player2: self.win(player1, player2),
-        ("Paper", "Betray"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Paper", "Block"): lambda self, player1, player2: self.tie(player1, player2),
-
-        ("Scissors", "Rock"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Scissors", "Paper"): lambda self, player1, player2: self.win(player1, player2),
-        ("Scissors", "Scissors"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Scissors", "Cooperate"): lambda self, player1, player2: self.win(player1, player2),
-        ("Scissors", "Betray"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Scissors", "Block"): lambda self, player1, player2: self.tie(player1, player2),
-
-        ("Cooperate", "Rock"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Cooperate", "Paper"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Cooperate", "Scissors"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Cooperate", "Cooperate"): lambda self, player1, player2: self.share(player1, player2),
-        ("Cooperate", "Betray"): lambda self, player1, player2: self.betrayed(player1, player2),
-        ("Cooperate", "Block"): lambda self, player1, player2: self.win(player1, player2),
-
-        ("Betray", "Rock"): lambda self, player1, player2: self.win(player1, player2),
-        ("Betray", "Paper"): lambda self, player1, player2: self.win(player1, player2),
-        ("Betray", "Scissors"): lambda self, player1, player2: self.win(player1, player2),
-        ("Betray", "Cooperate"): lambda self, player1, player2: self.betray(player1, player2),
-        ("Betray", "Betray"): lambda self, player1, player2: self.double_betray(player1, player2),
-        ("Betray", "Block"): lambda self, player1, player2: self.betrayed(player1, player2),
-
-        ("Block", "Rock"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Block", "Paper"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Block", "Scissors"): lambda self, player1, player2: self.tie(player1, player2),
-        ("Block", "Cooperate"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Block", "Betray"): lambda self, player1, player2: self.betray(player1, player2),
-        ("Block", "Block"): lambda self, player1, player2: self.tie(player1, player2),
+    MOVES = ("Rock", "Paper", "Scissors", "Cooperate", "Betray", "Block")
+    PAYOFF_LEGEND = {
+        "tie"   : ( 0,  0),
+        "win"   : ( 1, -1),
+        "lose"  : (-1,  1),
+        "win x3": ( 3, -3),
+        "losex3": (-3,  3),
+        "share" : ( 3,  3),
+        "double": (-5, -5),
     }
 
+    OUTCOMES = (
+        # Each row in this 2D list corresponds to a move in MOVES.
+        # The order of the moves in each pair should correspond to the order of the payoffs in PAYOFF_LEGEND.
+        #-Player-
+        # Rock   , Paper   , Scissors, Cooper  , Betray  , Block
+        #----------------------------------------------------------    # -Opponent-
+        ("tie"   , "win"   , "lose"  , "lose"  , "win"   , "tie"   ),  # Rock
+        ("lose"  , "tie"   , "win"   , "lose"  , "win"   , "tie"   ),  # Paper
+        ("win"   , "lose"  , "tie"   , "lose"  , "win"   , "tie"   ),  # Scissors
+        ("win"   , "win"   , "win"   , "share" , "win x3", "lose"  ),  # Cooperate
+        ("lose"  , "lose"  , "lose"  , "losex3", "double", "win"   ),  # Betray
+        ("tie"   , "tie"   , "tie"   , "win"   , "lose"  , "tie"   ),  # Block
+    )
     def __init__(self, player1, player2, pot, player_list):
         self.PLAYER_LIST = player_list
+        self.PAYOFF_MATRIX = {
+            move: {other_move: outcome for other_move, outcome in zip(Match.MOVES, outcomes)}
+            for move, outcomes in zip(Match.MOVES, Match.OUTCOMES)
+        }
+
         self.players = [player1, player2]
         self.pot = pot
         self.round = 0
@@ -124,28 +108,35 @@ class Match:
             p1_move,
             p2_move
         )
-        output_override = None
+        result_override = None
         print()
         print(f"Round {self.round}! Rock, Paper, Scissors, Cooperate, Betray, Block, SHOOT!")
         print(f"{self.players[0].name} chooses {p1_move}.")
         print(f"{self.players[1].name} chooses {p2_move}.")
-        
+
         if p1_move == "Block" and self.last_move[0] == "Block" and p2_move == "Betray":
             print(f"{self.players[0].name} tried blocking twice in a row!")
-            output_override = self.betray(*self.players[::-1])
+            result_override = "losex3"
         if p2_move == "Block" and self.last_move[1] == "Block" and p1_move == "Betray":
             print(f"{self.players[1].name} tried blocking twice in a row!")
-            output_override = self.betray(*self.players)
+            result_override = "win x3"
         if p1_move == "Betray" and self.last_move[0] == "Betray" and self.last_move[1] == "Block":
             print(f"{self.players[0].name} tried to betray after being blocked!")
-            output_override = self.win(*self.players[::-1])
+            result_override = "win"
         if p2_move == "Betray" and self.last_move[1] == "Betray" and self.last_move[0] == "Block":
             print(f"{self.players[1].name} tried to betray after being blocked!")
-            output_override = self.win(*self.players)
+            result_override = "lose"
 
         self.last_move = [p1_move, p2_move]
-        if output_override != None: return output_override
-        return self.MOVE_RESULTS[(p1_move, p2_move)](self, self.players[0], self.players[1])
+        result = result_override if result_override else self.PAYOFF_MATRIX[p1_move][p2_move]
+        for player, payout in zip(
+                self.players,
+                Match.PAYOFF_LEGEND[result]
+            ):
+            print(f"{player.name} {['gets','loses'][int(payout > 0)]} {abs(payout)} chip{['s',''][int(abs(payout) == 1)]}")
+            player.chips += payout
+            self.pot -= payout
+        return self.PAYOFF_MATRIX[p1_move][p2_move]
 
     def play_game(self):
         result = ""
@@ -155,38 +146,6 @@ class Match:
 
     def __str__(self):
         return f"Pot: {self.pot} chips.\n{self.players[0]}\n{self.players[1]}"
-
-    def lose(self, player1, player2): self.win(player2, player1)
-    def win(self, player1, player2):
-        player1.chips += 1
-        player2.chips -= 1
-        print(f"{player1.name} wins this round taking 1 chip!")
-        return "win"
-
-    def betrayed(self, player1, player2): self.betray(player2, player1)
-    def betray(self, player1, player2):
-        player1.chips += 3
-        player2.chips -= 3
-        print(f"{player1.name} betrays {player2.name} and takes three chips!")
-        return "betray"
-
-    def tie(self, player1, player2):
-        print(f"It's a tie!")
-        return "tie"
-
-    def share(self, player1, player2):
-        player1.chips += 5
-        player2.chips += 5
-        self.pot -= 10
-        print(f"{player1.name} and {player2.name} share six chips from the pot!(3 each)")
-        return "share"
-
-    def double_betray(self, player1, player2):
-        self.pot += 10
-        player1.chips -= 5
-        player2.chips -= 5
-        print(f"{player1.name} and {player2.name} both betray! Each put 5 chips in the pot!")
-        return "double_betray"
 
 class GameGroup:
     def __init__(self, players, initial_pot, entry_stake):
