@@ -1,10 +1,10 @@
 import random
 
 class Player:
-    def __init__(self, name):
+    def __init__(self, name, max_chips=50):
         self.name = name
-        self.chips = 10
-        self.leave_rate = random.randint(1,25)
+        self.chips = random.randint(1,max_chips)
+        self.leave_rate = random.randint(1,6)
         self.last_move = ""
         self.history = []
 
@@ -87,13 +87,13 @@ class Match:
         ("Betray", "Scissors"): lambda self, player1, player2: self.win(player1, player2),
         ("Betray", "Cooperate"): lambda self, player1, player2: self.betray(player1, player2),
         ("Betray", "Betray"): lambda self, player1, player2: self.double_betray(player1, player2),
-        ("Betray", "Block"): lambda self, player1, player2: self.lose(player1, player2),
+        ("Betray", "Block"): lambda self, player1, player2: self.betrayed(player1, player2),
 
         ("Block", "Rock"): lambda self, player1, player2: self.tie(player1, player2),
         ("Block", "Paper"): lambda self, player1, player2: self.tie(player1, player2),
         ("Block", "Scissors"): lambda self, player1, player2: self.tie(player1, player2),
         ("Block", "Cooperate"): lambda self, player1, player2: self.lose(player1, player2),
-        ("Block", "Betray"): lambda self, player1, player2: self.win(player1, player2),
+        ("Block", "Betray"): lambda self, player1, player2: self.betray(player1, player2),
         ("Block", "Block"): lambda self, player1, player2: self.tie(player1, player2),
     }
 
@@ -175,27 +175,31 @@ class Match:
         return "tie"
 
     def share(self, player1, player2):
-        player1.chips += 3
-        player2.chips += 3
-        self.pot -= 6
+        player1.chips += 5
+        player2.chips += 5
+        self.pot -= 10
         print(f"{player1.name} and {player2.name} share six chips from the pot!(3 each)")
         return "share"
 
     def double_betray(self, player1, player2):
         self.pot += 10
-        player1.chips -= 4
-        player2.chips -= 4
+        player1.chips -= 5
+        player2.chips -= 5
         print(f"{player1.name} and {player2.name} both betray! Each put 5 chips in the pot!")
         return "double_betray"
 
 class GameGroup:
-    def __init__(self, players, initial_pot):
+    def __init__(self, players, initial_pot, entry_stake):
+        self.ENTRY_STAKE = entry_stake
         self.past_players = []
         self.players = players
         self.current_match = None
-        self.pot = initial_pot
+        self.pot = initial_pot + len(players) * self.ENTRY_STAKE
         self.match_count = 0
         self.player_to_id = {player.name: i for i, player in enumerate(players)}
+
+        for player in self.players: print(player)
+        print("total: " + str(sum([player.chips for player in self.players])+self.pot))
     
     def start_new_match(self, player1, player2):
         self.current_match = Match(player1, player2, self.pot, self.players)
@@ -206,7 +210,7 @@ class GameGroup:
         challenger = self.players[player_index]
         banned_names = [challenger.name]
 
-        while len(self.players) > 2 and self.pot > 0:
+        while len(self.players) > 2 and self.pot > 6 + self.ENTRY_STAKE:
             # Select opponent
             opponent_index = challenger.choose_opponent(self.players, banned_names)
             opponent = self.players[opponent_index]
@@ -222,6 +226,9 @@ class GameGroup:
 
             # If a player has no chips left, they leave the game
             if challenger.chips <= 0 or challenger.check_leave():
+                temp = min(self.ENTRY_STAKE,self.pot)
+                challenger.chips += temp
+                self.pot -= temp
                 if challenger.chips <= 0:
                     print(f"\n{challenger.name} has no more chips and leaves the game.")
                     self.pot += challenger.chips
@@ -235,7 +242,10 @@ class GameGroup:
                     )
                     print(f"\n{challenger.name} leaves with what they have.")
                 challenger = opponent
-            elif opponent.chips <= 0 or opponent.check_leave():
+            elif opponent.chips <= 0 or (opponent.check_leave() and self.pot > self.ENTRY_STAKE):
+                temp = min(self.ENTRY_STAKE,self.pot)
+                opponent.chips += temp
+                self.pot -= temp
                 if opponent.chips <= 0:
                     print(f"\n{opponent.name} has no more chips and leaves the game.")
                     self.pot += opponent.chips
@@ -277,15 +287,20 @@ class GameGroup:
         self.past_players = sorted(self.past_players, key=lambda player: player.chips, reverse=True)
         
         for player in self.past_players: print(player)
+        print()
+        print("total: " + str(sum([player.chips for player in self.past_players])+self.pot))
         input()
     
 if __name__ == "__main__":
     group = GameGroup([
-        Player("Opponent 1"),
-        Player("Opponent 2"),
-        Player("Opponent 3"),
-        Player("Opponent 4"),
+        Player("Player A"),
+        Player("Player B"),
+        Player("Player C"),
+        Player("Player One"),
+        Player("Player Two"),
+        Player("Player Three"),
         #HumanPlayer("You"),
-    ], initial_pot = 100)
+        #CustomPlayer("Fortnite",extra_data)
+    ], initial_pot = 40, entry_stake = 10)
 
     group.play_all_matches()
